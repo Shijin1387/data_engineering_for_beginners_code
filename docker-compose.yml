@@ -1,21 +1,74 @@
-version: '3.8'
+x-spark-common: &spark-common
+  build:
+    context: .
+    dockerfile: Dockerfile
+  image: sde-spark:local
+  volumes:
+    - ./warehouse:/home/airflow/warehouse
+    - ./spark-events:/home/airflow/spark-events
+  networks: [sparknet]
+
+x-worker-cmd: &worker-cmd
+  /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
+  spark://spark-master:7077 --cores 2 --memory 3g --webui-port 8081
 
 services:
-  airflow-spark:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: sde-decourse-airflow-spark
-    container_name: airflow-spark
-    ports:
-      - "8080:8080"   # Airflow webserver
-      - "4040:4040"   # Spark UI
-      - "8888:8888"   # Jupyter Lab
-      - "8081:8081"   # dbt docs
-      - "4778:4778"   # IGNORE, this is for de101.startdataengineering.com
+  spark-master:
+    <<: *spark-common
+    container_name: spark-master
+    hostname: spark-master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master --host spark-master --port 7077 --webui-port 8080
+    ports: ["127.0.0.1:8082:8080"]
+
+  spark-worker-1:
+    <<: *spark-common
+    container_name: spark-worker-1
+    hostname: spark-worker-1
+    depends_on: [spark-master]
+    command: *worker-cmd
+    ports: ["127.0.0.1:8083:8081"]
+
+  spark-worker-2:
+    <<: *spark-common
+    container_name: spark-worker-2
+    hostname: spark-worker-2
+    depends_on: [spark-master]
+    command: *worker-cmd
+    ports: ["127.0.0.1:8084:8081"]
+
+  spark-worker-3:
+    <<: *spark-common
+    container_name: spark-worker-3
+    hostname: spark-worker-3
+    depends_on: [spark-master]
+    command: *worker-cmd
+    ports: ["127.0.0.1:8085:8081"]
+
+  spark-history:
+    <<: *spark-common
+    container_name: spark-history
+    hostname: spark-history
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.history.HistoryServer
+    ports: ["127.0.0.1:18080:18080"]
+
+  driver:
+    <<: *spark-common
+    container_name: spark-driver
+    hostname: driver
+    depends_on: [spark-master]
+    environment:
+      START_AIRFLOW: "false"
     volumes:
+      - ./warehouse:/home/airflow/warehouse
+      - ./spark-events:/home/airflow/spark-events
+      - ./notebooks:/home/airflow/notebooks
       - ./airflow/dags:/home/airflow/dags
       - ./airflow/tpch_analytics:/home/airflow/tpch_analytics
-      - ./notebooks:/home/airflow/notebooks
-      - ./README.md:/home/airflow/README.md
-      - ./book:/home/airflow/book # This is for the de101.startdataengineering.com website pls ignore
+    ports:
+      - "127.0.0.1:8888:8888"
+      - "127.0.0.1:4040:4040"
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8081:8081"
+
+networks:
+  sparknet:
