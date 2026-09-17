@@ -59,6 +59,7 @@ services:
     depends_on: [spark-master]
     environment:
       START_AIRFLOW: "false"
+      PYSPARK_PYTHON: /home/airflow/.venv/bin/python
     volumes:
       - ./warehouse:/home/airflow/warehouse
       - ./spark-events:/home/airflow/spark-events
