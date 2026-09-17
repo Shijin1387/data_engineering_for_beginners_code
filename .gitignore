@@ -238,3 +238,4 @@ book/
 /metastore_db/
 warehouse/
 spark-events/
+data/
